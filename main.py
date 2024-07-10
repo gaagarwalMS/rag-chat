@@ -1,6 +1,5 @@
 import os  
 import asyncio
-import logging
 import json
 
 from dotenv import load_dotenv  
@@ -9,13 +8,7 @@ from semantic_kernel.connectors.ai.open_ai import (
     AzureChatCompletion,
     AzureTextEmbedding
 )  
-from semantic_kernel.connectors.ai.chat_completion_client_base import ChatCompletionClientBase  
-# from semantic_kernel.connectors.ai.function_call_behavior import FunctionCallBehavior  
-from semantic_kernel.functions.kernel_arguments import KernelArguments  
-from semantic_kernel.contents import ChatHistory  
-from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (  
-    AzureChatPromptExecutionSettings,  
-)
+
 from semantic_kernel.connectors.memory.azure_cosmosdb import (
     AzureCosmosDBMemoryStore,
 )
