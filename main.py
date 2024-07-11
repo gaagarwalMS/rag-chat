@@ -125,7 +125,7 @@ async def main():
         print("Registered Azure Cosmos DB Memory Store...\n")
 
         print("Upserting data to Azure Cosmos DB Memory Store...\n")
-        # await upsert_data_to_memory_store(memory, store, "./src/data.json")
+        await upsert_data_to_memory_store(memory, store, "./src/data.json")
 
         # each time it calls the embedding model to generate embeddings from your query
         query_term = "What do you know about the godfather?"
