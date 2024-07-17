@@ -1,6 +1,7 @@
 import os  
 import asyncio
 import json
+import time
 
 from dotenv import load_dotenv  
 from semantic_kernel import Kernel  
@@ -19,6 +20,18 @@ from utils.urlEncoder import getDPConnectionString
 
 from semantic_kernel.memory.semantic_text_memory import SemanticTextMemory
 from semantic_kernel.memory.memory_store_base import MemoryStoreBase
+
+from semantic_kernel.connectors.ai.open_ai import OpenAITextPromptExecutionSettings
+
+
+from semantic_kernel.prompt_template import PromptTemplateConfig
+from semantic_kernel.prompt_template.input_variable import InputVariable
+
+from semantic_kernel.functions import KernelArguments
+
+from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (  
+    AzureChatPromptExecutionSettings,  
+)
 
 azure_cosmos_container = os.getenv("AZCOSMOS_CONTAINER_NAME")
 
@@ -75,6 +88,7 @@ async def main():
         azure_oai_key = os.getenv("AZURE_OAI_KEY")  
         azure_oai_gpt4o_deployment = os.getenv("AZURE_OAI_GPT4O_DEPLOYMENT")  
         azure_oai_embedding_dep = os.getenv("AZURE_OAI_EMBEDDING_DEPLOYMENT")
+        azure_chat_dep_baseurl = os.getenv("AZURE_CHAT_DEP_BASEURL")
 
         azure_cosmos_dbname = os.getenv("AZCOSMOS_DATABASE_NAME")
         azure_cosmos_container = os.getenv("AZCOSMOS_CONTAINER_NAME")
@@ -87,7 +101,7 @@ async def main():
             service_id="chat_completion",  
             deployment_name=azure_oai_gpt4o_deployment,  
             api_key=azure_oai_key,  
-            endpoint=azure_oai_endpoint  
+            base_url=azure_chat_dep_baseurl  
         ))
         print("Added Azure OpenAI Chat Service...\n")
 
@@ -128,12 +142,62 @@ async def main():
         await upsert_data_to_memory_store(memory, store, "./src/data.json")
 
         # each time it calls the embedding model to generate embeddings from your query
-        query_term = "What do you know about the godfather?"
-        result = await memory.search(azure_cosmos_container, query_term)
+        # query_term = "What do you know about the godfather?"
+        # result = await memory.search(azure_cosmos_container, query_term)
 
-        print(
-            f"Result is: {result[0].text}\nRelevance Score: {result[0].relevance}\nFull Record: {result[0].additional_metadata}"
+        # print(
+        #     f"Result is: {result[0].text}\nRelevance Score: {result[0].relevance}\nFull Record: {result[0].additional_metadata}"
+        # )
+
+        prompt = """
+        You are a chatbot that can have a conversations about any topic related to the provided context.
+        Give answers relavant to the context supplemented with you knowledge. If you find the query topic not relavant to the context say, "I don't know"
+        provided context: {{$db_record}}
+
+        User: {{$query_term}}
+        Chatbot:"""
+
+        execution_settings = AzureChatPromptExecutionSettings(
+            service_id="chat_completion", ai_model_id=azure_oai_gpt4o_deployment, max_tokens=500, temperature=0.0, top_p=0.5
         )
+
+        chat_prompt_template_config = PromptTemplateConfig(
+            template=prompt,
+            name="grounded_response",
+            template_format="semantic-kernel",
+            input_variables=[
+                InputVariable(name="db_record", description="The database record", is_required=True),
+                InputVariable(name="query_term", description="The user input", is_required=True),
+            ],
+            execution_settings=execution_settings,
+        )
+
+        chat_function = kernel.add_function(
+            function_name="ChatGPTFunc", plugin_name="chatGPTPlugin", prompt_template_config=chat_prompt_template_config
+        )
+
+        # completions_result = await kernel.invoke(
+        #     chat_function, KernelArguments(query_term=query_term, db_record=result[0].additional_metadata)
+        # )
+
+        # print(completions_result)
+
+        query_term = ""
+        search_result = ""
+        completions_result = ""
+
+        while query_term != "exit":
+            print("\n")
+            query_term = input("Enter a query: ")
+            search_result = await memory.search(azure_cosmos_container, query_term)
+            completions_result = kernel.invoke_stream(
+                chat_function, KernelArguments(query_term=query_term, db_record=search_result[0].additional_metadata)
+            )
+            print(f"\nResponse:")
+            async for completion in completions_result:
+                print(str(completion[0]), end="")
+            print("\n")
+            time.sleep(5)
   
     except Exception as ex:  
         print(f"An error occurred in the main function: {ex}")
